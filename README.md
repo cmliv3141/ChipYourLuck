@@ -75,7 +75,7 @@ Use the same email as your GitHub account.
 ### Step 4 — Clone the repo
 Navigate to the folder on your computer where you want the project to live, then run:
 ```bash
-git clone <REPO_URL>
+git clone https://github.com/cmliv3141/ChipYourLuck.git
 ```
 Replace `<REPO_URL>` with the link from the green "Code" button on our GitHub repo page. This creates a folder with the full project inside it.
 
