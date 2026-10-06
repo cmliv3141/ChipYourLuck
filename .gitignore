@@ -11,3 +11,4 @@ nbproject/Package-*
 *.inx
 .vscode/*
 !.vscode/extensions.json
+!cmake/**/user.cmake
