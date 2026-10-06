@@ -12,3 +12,10 @@ nbproject/Package-*
 .vscode/*
 !.vscode/extensions.json
 !cmake/**/user.cmake
+!nbproject/configurations.xml
+nbproject/
+Makefile*
+Package-*
+private/
+cmake/**/.generated/*
+cmake/**/CMake*
