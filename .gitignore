@@ -1,0 +1,13 @@
+build/
+dist/
+debug/
+_build/
+out/
+.generated_files/
+nbproject/private/
+nbproject/Makefile-*
+nbproject/Package-*
+*.log
+*.inx
+.vscode/*
+!.vscode/extensions.json
