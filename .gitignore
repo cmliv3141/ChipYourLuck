@@ -10,7 +10,6 @@ nbproject/Package-*
 *.log
 *.inx
 .vscode/*
-<<<<<<< HEAD
 !.vscode/extensions.json
 !cmake/**/user.cmake
 !nbproject/configurations.xml
@@ -20,6 +19,4 @@ Package-*
 private/
 cmake/**/.generated/*
 cmake/**/CMake*
-=======
 !.vscode/extensions.json
->>>>>>> 89bfd5ea2651ea2864b6daccead835e4cc11de35
