@@ -16,8 +16,10 @@ foreach(source_file ${ChipYourLuck_default_default_XC32_FILE_TYPE_assembleWithPr
 endforeach()
 
 set(ChipYourLuck_default_default_XC32_FILE_TYPE_compile
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../src/clock.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../src/led.c"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../../../src/main.c")
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../src/main.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../../src/uart.c")
 set_source_files_properties(${ChipYourLuck_default_default_XC32_FILE_TYPE_compile} PROPERTIES LANGUAGE C)
 set(ChipYourLuck_default_default_XC32_FILE_TYPE_compile_cpp)
 set_source_files_properties(${ChipYourLuck_default_default_XC32_FILE_TYPE_compile_cpp} PROPERTIES LANGUAGE CXX)
