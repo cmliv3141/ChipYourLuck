@@ -218,11 +218,7 @@
       </C32CPP>
       <C32Global>
         <property key="combine-sourcefiles" value="false"/>
-<<<<<<< HEAD
         <property key="common-include-directories" value="inc"/>
-=======
-        <property key="common-include-directories" value=""/>
->>>>>>> 89bfd5ea2651ea2864b6daccead835e4cc11de35
         <property key="common-macros" value=""/>
         <property key="dual-boot-partition" value="0"/>
         <property key="generic-16-bit" value="false"/>
