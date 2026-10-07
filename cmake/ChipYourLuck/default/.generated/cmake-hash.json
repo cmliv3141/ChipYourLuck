@@ -1,7 +1,12 @@
 {
     "hashFileVersion": "1.1.0",
+<<<<<<< HEAD
+    "projectFileHash": "998bf418f85376b6b6ba67d08123af387914bda89cf2598a1a9f32566a009bc3",
+    "cmakeFilesHash": "1271a93154af2539dddd1d8ff32620df13bc8d5cf25f8e21e92feb6f04e968f4",
+=======
     "projectFileHash": "95a9a64d95d48ec558aa856d14b51e5b097a309712f53d2777d5af4ae6e3aa68",
     "cmakeFilesHash": "2b652d8adec2be4ff6b21ab264818c8424d3df973c87c9d707eeadd7dd3fd0b6",
+>>>>>>> 89bfd5ea2651ea2864b6daccead835e4cc11de35
     "cmakerVersion": "5.0.2",
     "workspacePath": "c:/users/clivi/desktop/chipyourluck"
 }

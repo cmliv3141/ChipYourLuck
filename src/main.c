@@ -1,5 +1,21 @@
 #include <xc.h>
 #include "board.h"
+<<<<<<< HEAD
+#include "uart.h"
+
+
+
+
+
+int main() {
+    initUART();
+    uart_puts("Hello World\r\n");
+
+    while(1){
+        if(uart_rx_ready()){
+            char c = uart_getc();
+            uart_putc(c);
+=======
 
 
 
@@ -39,6 +55,7 @@ int main() {
         if(cyclesPassed >= 10000000){
             toggleLED();
             startCount = nowCount;
+>>>>>>> 89bfd5ea2651ea2864b6daccead835e4cc11de35
         }
     }
 }
