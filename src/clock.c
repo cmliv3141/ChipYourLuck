@@ -1,5 +1,6 @@
 #include "clock.h"
 #include "board.h"
+#include <stdint.h>
 
 void master_clock_enable_bus(volatile uint32_t *reg, uint32_t mask) {
   *reg |= mask;
@@ -52,7 +53,8 @@ int gclk_setup_clock_generator(uint8_t clockGeneratorNumber,
 
   // set the clock's division settings
   if (clockGeneratorNumber == 1) {
-    gclkConfigureMsk |= dividerValue << GCLK_GENCTRL_DIV_Pos;
+    gclkConfigureMsk |=
+    (uint16_t)dividerValue << GCLK_GENCTRL_DIV_Pos;
   } else {
     // Only Gen Clock 1 Supports 16 div bits
     if (dividerValue > UINT8_MAX)

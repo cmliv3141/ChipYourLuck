@@ -2,8 +2,9 @@
 #include <xc.h>
 
 #include "board.h"
-#include "uart.h"
 #include "clock.h"
+#include "uart.h"
+
 
 #define UART_REGS (SERCOM5_REGS->USART_INT)
 
@@ -51,9 +52,9 @@ void initUART(void) {
 
   master_clock_enable_bus(&MCLK_REGS->MCLK_APBDMASK, MCLK_APBDMASK_SERCOM5_Msk);
 
-  gclk_enable_peripherial(SERCOM5_GCLK_CHANNEL, 0);
-  
-  
+
+  gclk_enable_peripherial(SERCOM5_GCLK_CHANNEL, GCLK_PCHCTRL_GEN_GCLK0_Val);
+
   pin_to_peripheral(UART_PIN_GROUP, UART_TX_PIN, UART_PMUX_FUNC, 0U);
   pin_to_peripheral(UART_PIN_GROUP, UART_RX_PIN, UART_PMUX_FUNC, PINCFG_INEN);
 
@@ -84,7 +85,9 @@ void uart_puts(const char *s) {
   }
 }
 
-bool uart_rx_ready(void) { return (UART_REGS.SERCOM_INTFLAG & SERCOM_USART_INT_INTFLAG_RXC_Msk) != 0u; }
+bool uart_rx_ready(void) {
+  return (UART_REGS.SERCOM_INTFLAG & SERCOM_USART_INT_INTFLAG_RXC_Msk) != 0u;
+}
 
 char uart_getc(void) {
   if (uart_rx_ready()) {
