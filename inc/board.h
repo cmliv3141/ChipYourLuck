@@ -1,8 +1,10 @@
 #ifndef INC_BOARD
 #define INC_BOARD
 
-#include <stdint.h>
 #include <xc.h>
+
+#define GCLK_MAX_GENERATOR 11U
+
 
 #define LED0_PIN            (14U)
 #define UART_PIN_GROUP      (1U)
