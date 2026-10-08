@@ -3,6 +3,7 @@
 
 #include "board.h"
 #include "uart.h"
+#include "clock.h"
 
 #define UART_REGS (SERCOM5_REGS->USART_INT)
 
@@ -47,13 +48,12 @@ static void pin_to_peripheral(uint32_t group, uint32_t pin, uint32_t func,
 }
 
 void initUART(void) {
-  MCLK_REGS->MCLK_APBDMASK |= SERCOM5_APBD_BIT;
 
-  GCLK_REGS->GCLK_PCHCTRL[SERCOM5_GCLK_CHANNEL] = GCLK_PCHCTRL_CHEN_BIT;
-  while ((GCLK_REGS->GCLK_PCHCTRL[SERCOM5_GCLK_CHANNEL] &
-          GCLK_PCHCTRL_CHEN_BIT) == 0U) {
-  }
+  master_clock_enable_bus(&MCLK_REGS->MCLK_APBDMASK, MCLK_APBDMASK_SERCOM5_Msk);
 
+  gclk_enable_peripherial(SERCOM5_GCLK_CHANNEL, 0);
+  
+  
   pin_to_peripheral(UART_PIN_GROUP, UART_TX_PIN, UART_PMUX_FUNC, 0U);
   pin_to_peripheral(UART_PIN_GROUP, UART_RX_PIN, UART_PMUX_FUNC, PINCFG_INEN);
 
