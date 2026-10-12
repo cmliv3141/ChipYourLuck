@@ -17,4 +17,6 @@ int nvmctrl_set_flash_wait_states(uint8_t numWaitStates);
 
 int oscctrl_configure_dpll0(void);
 
+int system_clock_switch_to_dpll0(void);
+
 #endif /* INC_CLOCK */

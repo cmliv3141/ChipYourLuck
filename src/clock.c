@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-
 uint32_t SystemCoreClock = 48000000U;
 
 void mclk_enable_bus_clock(volatile uint32_t *reg, uint32_t mask) {
@@ -205,4 +204,82 @@ int oscctrl_configure_dpll0(void) {
   }
 
   return 0; // Success
+}
+
+int system_clock_switch_to_dpll0(void) {
+
+  uint32_t currentStatusDPLL = OSCCTRL_REGS->DPLL[0].OSCCTRL_DPLLSTATUS;
+
+  uint32_t requiredFlagsDPLL =
+      OSCCTRL_DPLLSTATUS_LOCK_Msk | OSCCTRL_DPLLSTATUS_CLKRDY_Msk;
+
+  if ((currentStatusDPLL & requiredFlagsDPLL) != requiredFlagsDPLL) {
+    return -1;
+  }
+
+  uint32_t NVMctrlRWS = (NVMCTRL_REGS->NVMCTRL_CTRLA & NVMCTRL_CTRLA_RWS_Msk) >>
+                        NVMCTRL_CTRLA_RWS_Pos;
+  uint32_t NVMctrlAutoWS =
+      (NVMCTRL_REGS->NVMCTRL_CTRLA & NVMCTRL_CTRLA_AUTOWS_Msk) >>
+      NVMCTRL_CTRLA_AUTOWS_Pos;
+
+  if (NVMctrlRWS < 6u || NVMctrlAutoWS != 0u) {
+    return -2;
+  }
+
+  uint32_t MCLKdiv =
+      (MCLK_REGS->MCLK_CPUDIV & MCLK_CPUDIV_DIV_Msk) >> MCLK_CPUDIV_DIV_Pos;
+
+  if (MCLKdiv != 1u) {
+    return -3;
+  }
+
+  uint32_t currentGCLKConfig = GCLK_REGS->GCLK_GENCTRL[0];
+
+  currentGCLKConfig &= ~(GCLK_GENCTRL_SRC_Msk);
+  currentGCLKConfig |= GCLK_GENCTRL_SRC(GCLK_GENCTRL_SRC_DPLL0_Val);
+
+  struct SysTickTimer timer = {0,0};
+
+  sysTick_init(&timer);
+
+  bool timeOut = true;
+
+  while (sysTick_get_time_difference_us(&timer) < DPLL_LOCK_TIMEOUT_US) {
+    if((GCLK_REGS->GCLK_SYNCBUSY & (1 << (2))) == 0){
+      timeOut = false;
+      break;
+    }
+  }
+
+  if(timeOut) return -4;
+
+  uint32_t GCLKdiv = (GCLK_REGS->GCLK_GENCTRL[0] & GCLK_GENCTRL_DIV_Msk) >>
+                     GCLK_GENCTRL_DIV_Pos;
+  uint32_t GCLKdivSel =
+      (GCLK_REGS->GCLK_GENCTRL[0] & GCLK_GENCTRL_DIVSEL_Msk) >>
+      GCLK_GENCTRL_DIVSEL_Pos;
+  uint32_t GCLKGenEn = (GCLK_REGS->GCLK_GENCTRL[0] & GCLK_GENCTRL_GENEN_Msk) >>
+                       GCLK_GENCTRL_GENEN_Pos;
+
+  if ((GCLKdiv != 0U && GCLKdiv != 1U) || GCLKdivSel != 0 || GCLKGenEn != 1) {
+    return -5;
+  }
+
+  GCLK_REGS->GCLK_GENCTRL[0] = currentGCLKConfig;
+
+
+  while (sysTick_get_time_difference_us(&timer) < DPLL_LOCK_TIMEOUT_US) {
+    if((GCLK_REGS->GCLK_SYNCBUSY & (1 << (2))) == 0){
+      timeOut = false;
+      break;
+    }
+  }
+
+  if(timeOut) return -6;
+
+
+  SystemCoreClock = 120000000U;
+
+  return 0;
 }
