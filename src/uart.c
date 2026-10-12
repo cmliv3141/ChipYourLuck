@@ -48,12 +48,12 @@ static void pin_to_peripheral(uint32_t group, uint32_t pin, uint32_t func,
   g->PORT_PINCFG[pin] = (uint8_t)(PINCFG_PMUXEN | extraCfg);
 }
 
-void initUART(void) {
+void uart_init() {
 
-  master_clock_enable_bus(&MCLK_REGS->MCLK_APBDMASK, MCLK_APBDMASK_SERCOM5_Msk);
+  mclk_enable_bus_clock(&MCLK_REGS->MCLK_APBDMASK, MCLK_APBDMASK_SERCOM5_Msk);
 
 
-  gclk_enable_peripherial(SERCOM5_GCLK_CHANNEL, GCLK_PCHCTRL_GEN_GCLK0_Val);
+  gclk_enable_peripheral_channel(SERCOM5_GCLK_CHANNEL, GCLK_PCHCTRL_GEN_GCLK1_Val);
 
   pin_to_peripheral(UART_PIN_GROUP, UART_TX_PIN, UART_PMUX_FUNC, 0U);
   pin_to_peripheral(UART_PIN_GROUP, UART_RX_PIN, UART_PMUX_FUNC, PINCFG_INEN);
