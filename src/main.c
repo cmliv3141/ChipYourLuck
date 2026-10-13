@@ -3,6 +3,8 @@
 #include "systick.h"
 #include "test.h"
 #include "uart.h"
+#include "tc.h"
+
 #include <xc.h>
 
 int main() {
@@ -16,57 +18,24 @@ int main() {
   // initialize UART
   uart_init();
 
-  struct SysTickTimer timer = {0, 0};
-  sysTick_init(&timer);
-
-  // test led toggle
-  int count = 0;
-  int cycles = 0;
-  while (count < 10) {
-    if (sysTick_get_time_difference_us(&timer) > 50000) {
-      cycles += 1;
-      sysTick_set_start_value(&timer);
-
-      if (cycles == 10) {
-        led_toggle();
-        count += 1;
-        cycles = 0;
-      }
-    }
-  }
-
   // Prepare flash for higher CPU speed
   nvmctrl_set_flash_wait_states(6U);
 
   // configure DPll0
 
-  if (oscctrl_configure_dpll0() == 0) {
-    uart_puts("[PASS] DPLL0 INITIALIZATION\r\n");
-  } else {
-    uart_puts("[FAIL] DPLL0 INITIALIZATION\r\n");
+  if (oscctrl_configure_dpll0() != 0) {
+    uart_puts("[Failure] COULD NOT CONFIGURE DPLL0 PROPERLY\r\n");
+    return -1;
   }
-
-  if (system_clock_switch_to_dpll0() == 0) {
-    uart_puts("[PASS] System Clock is DPLL0 (120 MHz)\r\n");
-  } else {
-    uart_puts("[FAIL] System Clock is not DPLL0 (120 MHz)\r\n");
+  if (system_clock_switch_to_dpll0() != 0) {
+    uart_puts("[Failure] COULD NOT SWITCH SYSTEM CLOCK PROPERLY\r\n");
+    return -1;
   }
-  count = 0;
-  sysTick_set_start_value(&timer);
-  cycles = 0;
+    
+  //test out tc interputs
+  tc0_init_periodic_interrupt(500U);
 
-  while (count < 10) {
-    if (sysTick_get_time_difference_us(&timer) > 50000) {
-      cycles += 1;
-      sysTick_set_start_value(&timer);
-
-      if (cycles == 10) {
-        led_toggle();
-        count += 1;
-        cycles = 0;
-      }
-    }
-  }
+  tc0_start();
 
   while (1) {
     if (uart_rx_ready()) {
