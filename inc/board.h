@@ -3,6 +3,10 @@
 
 #include <xc.h>
 
+
+#define TC0_PERIPHERAL_CHANNEL (9U)
+#define TC0_PERIPHERAL_CHANNEL_SOURCE (1U)
+
 #define GCLK_MAX_GENERATOR 11U
 
 #define GCLK_OSCTRL_DFll48 0
