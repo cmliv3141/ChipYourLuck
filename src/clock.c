@@ -282,8 +282,4 @@ int system_clock_switch_to_dpll0(void) {
   SystemCoreClock = 120000000U;
 
   return 0;
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> fe90874 (CPU Clock now at 180 Mhz and Sys clock / LED reimplemented)
