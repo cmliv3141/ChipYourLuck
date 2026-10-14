@@ -1,9 +1,10 @@
 #include "clock.h"
 #include "led.h"
 #include "systick.h"
+#include "tc.h"
 #include "test.h"
 #include "uart.h"
-#include "tc.h"
+
 
 #include <xc.h>
 
@@ -17,6 +18,10 @@ int main() {
 
   // initialize UART
   uart_init();
+  uart_puts("\r\n");
+  uart_enable_rx_interrupt();
+
+  uint8_t receivedBytes = 0x0;
 
   // Prepare flash for higher CPU speed
   nvmctrl_set_flash_wait_states(6U);
@@ -31,20 +36,17 @@ int main() {
     uart_puts("[Failure] COULD NOT SWITCH SYSTEM CLOCK PROPERLY\r\n");
     return -1;
   }
-    
-  //test out tc interputs
+
+  // test out tc interputs
   tc0_init_periodic_interrupt(500U);
 
   tc0_start();
 
   while (1) {
-    if (uart_rx_ready()) {
-      char c = uart_getc();
-      if (c == '\r') {
-        uart_putc('\r');
+    if (uart_read_byte(&receivedBytes)) {
+      uart_putc(receivedBytes);
+      if (receivedBytes == '\r') {
         uart_putc('\n');
-      } else {
-        uart_putc(c);
       }
     }
   }
