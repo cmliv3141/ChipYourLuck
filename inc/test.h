@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 static void test_report(bool passed, const char *message);
+void test_ring_buffer(void);
 void test_dpll0_configuration(void);
 void test_nvmctrl_set_flash_wait_states(uint8_t numWaitStates);
 void test_dp11_reference_clock(void);

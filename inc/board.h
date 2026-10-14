@@ -4,6 +4,8 @@
 #include <xc.h>
 
 
+#define RING_BUFFER_SIZE 16
+
 #define TC0_PERIPHERAL_CHANNEL (9U)
 #define TC0_PERIPHERAL_CHANNEL_SOURCE (1U)
 
