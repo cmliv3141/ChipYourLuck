@@ -1,21 +1,52 @@
+#include "test.h"
 #include "board.h"
 #include "clock.h"
+#include "ring_buffer.h"
 #include "uart.h"
-#include "test.h"
 
+static void test_report(bool passed, const char *message) {
+  if (passed) {
+    uart_puts("[PASS] ");
+  } else {
+    uart_puts("[FAIL] ");
+  }
 
-static void test_report(bool passed, const char *message)
-{
-    if (passed) {
-        uart_puts("[PASS] ");
-    } else {
-        uart_puts("[FAIL] ");
-    }
-
-    uart_puts(message);
-    uart_puts("\r\n");
+  uart_puts(message);
+  uart_puts("\r\n");
 }
 
+void test_ring_buffer(void) {
+  uart_puts("========= RING BUFFER TEST =========\r\n");
+  // init the ring buffer
+  struct RingBuffer buff;
+  ring_buffer_init(&buff);
+
+  // test is empty since buffer is empty
+  test_report(ring_buffer_is_empty(&buff), "BUFFER EMPTY");
+
+  test_report(ring_buffer_push(&buff, (uint8_t)'A'), "PUSHED BYTE");
+
+  uint8_t byte;
+  test_report(ring_buffer_pop(&buff, &byte), "POPPED BYTE");
+
+  test_report((byte == (uint8_t)'A'), "CORRECT BYTE RECIEVED");
+
+  test_report(!ring_buffer_pop(&buff, &byte), "BUFFER EMPTY");
+
+  ring_buffer_push(&buff, 'A');
+  ring_buffer_push(&buff, 'B');
+  ring_buffer_push(&buff, 'C');
+
+  test_report(!ring_buffer_push(&buff, 'D'), "BUFFER FULL");
+
+  ring_buffer_pop(&buff, &byte);
+
+  ring_buffer_push(&buff, 'E');
+
+  test_report((buff.array[0] == (uint8_t)'E'), "WRAP AROUND");
+
+  uart_puts("========= RING BUFFER TEST COMPLETE =========\r\n");
+}
 
 void test_dpll0_configuration(void) {
   uart_puts("========= DPLL0 CONFIGURATION TEST =========\r\n");
