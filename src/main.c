@@ -12,6 +12,8 @@ int main() {
   // initilize led
   led_init();
 
+  uart_puts("\r\n");
+  
   // setup GCLK 1 for UART
   gclk_configure_generator(1, GCLK_GENCTRL_SRC_DFLL_Val, 1);
 
@@ -36,6 +38,9 @@ int main() {
   tc0_init_periodic_interrupt(500U);
 
   tc0_start();
+
+  //test ring buffer
+  test_ring_buffer();
 
   while (1) {
     if (uart_rx_ready()) {
