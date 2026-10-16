@@ -4,7 +4,7 @@
 #include "tc.h"
 #include "test.h"
 #include "uart.h"
-
+#include "test_string_utils.h"
 
 #include <xc.h>
 
@@ -41,6 +41,10 @@ int main() {
   tc0_init_periodic_interrupt(500U);
 
   tc0_start();
+
+  test_nvmctrl_memory_info();
+
+  test_string_utils();
 
   while (1) {
     if (uart_read_byte(&receivedBytes)) {

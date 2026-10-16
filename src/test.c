@@ -1,8 +1,10 @@
 #include "test.h"
 #include "board.h"
 #include "clock.h"
+#include "nvmctrl.h"
 #include "ring_buffer.h"
 #include "uart.h"
+
 
 static void test_report(bool passed, const char *message) {
   if (passed) {
@@ -12,6 +14,99 @@ static void test_report(bool passed, const char *message) {
   }
 
   uart_puts(message);
+  uart_puts("\r\n");
+}
+
+
+//TODO - REPLACE
+// A manual function to calculate string length
+int mystrlen(char *str) {
+  int len = 0;
+  while (str[len] != '\0') {
+    len++;
+  }
+  return len;
+}
+
+// A manual function to reverse a string in place
+void reverse(char *str) {
+  int i = 0;
+  int j = mystrlen(str) - 1;
+  while (i < j) {
+    char temp = str[i];
+    str[i] = str[j];
+    str[j] = temp;
+    i++;
+    j--;
+  }
+}
+
+// The conversion function
+void int_to_string(int num, char *str) {
+  int i = 0;
+  int is_negative = 0;
+
+  // Handle 0 explicitly, otherwise the loop will be skipped
+  if (num == 0) {
+    str[i++] = '0';
+    str[i] = '\0';
+    return;
+  }
+
+  // Handle negative numbers
+  // Note: This works for most numbers, but INT_MIN requires overflow care
+  if (num < 0) {
+    is_negative = 1;
+    num = -num;
+  }
+
+  // Process individual digits from right to left
+  while (num > 0) {
+    int rem = num % 10;
+    str[i++] = rem + '0'; // Convert single digit to ASCII character
+    num = num / 10;
+  }
+
+  // Append negative sign if necessary
+  if (is_negative) {
+    str[i++] = '-';
+  }
+
+  // Append the null terminator to make it a valid string
+  str[i] = '\0';
+
+  // Reverse the string since digits were extracted backward
+  reverse(str);
+}
+
+void test_nvmctrl_memory_info(void) {
+  struct nvmCtrlParams nvmCtrl;
+  uart_puts("========= NVM MEMORY INFORMATION =========\r\n");
+
+  nvmctrl_get_memory_info(&nvmCtrl);
+
+  char numpages[64];
+  char pagesize[64];
+  char capacity[64];
+  int_to_string(nvmCtrl.numPages, numpages);  
+  int_to_string(nvmCtrl.pageSize, pagesize);  
+  int_to_string(nvmCtrl.capacity, capacity);  
+
+  uart_puts("Flash Pages: \t");
+  uart_puts(numpages);
+  uart_puts("\r\n");
+
+  uart_puts("Flash Page Size: \t");
+  uart_puts(pagesize);
+  uart_puts("\r\n");
+
+  uart_puts("Total Flash: \t");
+  uart_puts(capacity);
+  uart_puts("\r\n");
+
+  uart_puts("SmartEEPROM: \t");
+
+  uart_puts(nvmCtrl.smartEEPROM ? "True" : "False");
   uart_puts("\r\n");
 }
 
