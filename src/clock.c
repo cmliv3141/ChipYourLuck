@@ -108,7 +108,7 @@ int nvmctrl_set_flash_wait_states(uint8_t numWaitStates) {
 
 int oscctrl_configure_dpll0(void) {
 
-  struct SysTickTimer timer;
+  SysTickTimer timer;
 
   sysTick_init(&timer);
 
@@ -239,7 +239,7 @@ int system_clock_switch_to_dpll0(void) {
   currentGCLKConfig &= ~(GCLK_GENCTRL_SRC_Msk);
   currentGCLKConfig |= GCLK_GENCTRL_SRC(GCLK_GENCTRL_SRC_DPLL0_Val);
 
-  struct SysTickTimer timer = {0,0};
+  SysTickTimer timer;
 
   sysTick_init(&timer);
 

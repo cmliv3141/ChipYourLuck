@@ -1,10 +1,12 @@
 #include "clock.h"
+#include "conversion.h"
 #include "led.h"
+#include "string_utils.h"
 #include "systick.h"
 #include "tc.h"
 #include "test.h"
+#include "test_string_utils.h"
 #include "uart.h"
-
 
 #include <xc.h>
 
@@ -41,6 +43,28 @@ int main() {
   tc0_init_periodic_interrupt(500U);
 
   tc0_start();
+
+  // test_nvmctrl_memory_info();
+
+  // test_string_utils();
+
+  // test_nvmctrl_read_flash();
+
+  // int i = 276;
+
+  // char buff[2 * sizeof(i) + 1];
+
+  // string s;
+
+  // str_init(&s, &buff[0], 64, "");
+
+  // str_format(&s, "The Int: %d \r\n", i);
+
+  // uart_puts(s.chars);
+
+  // test_nvmctrl_erase_flash();
+
+  test_nvmctrl_write_page();
 
   while (1) {
     if (uart_read_byte(&receivedBytes)) {

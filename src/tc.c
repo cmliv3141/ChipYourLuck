@@ -41,7 +41,7 @@ int tc0_init_periodic_interrupt(uint32_t interval_ms) {
   TC0_REGS->COUNT16.TC_CTRLA = ctrlaConfig;
 
   // wait for synch
-  struct SysTickTimer timer = {0, 0};
+  SysTickTimer timer;
   sysTick_init(&timer);
 
   bool timedOut = true;

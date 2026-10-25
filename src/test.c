@@ -1,7 +1,9 @@
 #include "test.h"
 #include "board.h"
 #include "clock.h"
+#include "nvmctrl.h"
 #include "ring_buffer.h"
+#include "string_utils.h"
 #include "uart.h"
 
 static void test_report(bool passed, const char *message) {
@@ -14,6 +16,109 @@ static void test_report(bool passed, const char *message) {
   uart_puts(message);
   uart_puts("\r\n");
 }
+
+void test_nvmctrl_write_page(void) {
+  uart_puts("\r\n========= NVMCTRL FLASH WRITE TEST =========\r\n");
+
+  bool unlocked = (NVMCTRL_REGS->NVMCTRL_RUNLOCK * (1u << 31) != 0);
+
+  if (unlocked) {
+    test_report(nvmctrl_erase_block(0x000FE000U), "NVMCTRL ERASE BLOCK");
+  } else {
+    uart_puts("[FAILURE] BLOCK IS LOCKED BY SMARTEEPROM\r\n");
+  }
+
+  uint8_t testData[7] = {0xDE, 0xAD, 0xBE, 0xEF, 0x12, 0x34, 0x56};
+
+  test_report(nvmctrl_write_page(0x000FE000U, &testData[0], 7),
+              "NVMCTRL WRITE PAGE");
+
+  uint8_t readData[7];
+  test_report(nvmctrl_read_flash(0x000FE000U, &readData[0], 7),
+              "NVMCTRL READ DATA");
+
+  for (uint32_t i = 0; i < 8; i++) {
+    string formated;
+    char s[64];
+
+    if (!str_init(&formated, &s[0], 64, ""))
+      return;
+    str_format(&formated, "Expected Byte: %x Recieved Byte: %x", testData[i],
+               readData[i]);
+
+    test_report(testData[i] == readData[i], formated.chars);
+  }
+}
+
+void test_nvmctrl_erase_flash(void) {
+  uart_puts("\r\n========= NVMCTRL FLASH ERASE TEST =========\r\n");
+
+  bool unlocked = (NVMCTRL_REGS->NVMCTRL_RUNLOCK * (1u << 31) != 0);
+
+  if (unlocked) {
+    test_report(nvmctrl_erase_block(0x000FE000U), "NVMCTRL ERASE BLOCK");
+  } else {
+    uart_puts("[FAILURE] BLOCK IS LOCKED BY SMARTEEPROM\r\n");
+  }
+}
+
+void test_nvmctrl_read_flash(void) {
+
+  uart_puts("\r\n========= NVMCTRL FLASH READ TEST =========\r\n");
+
+  static const uint8_t flashTestPattern[] = {0xA5, 0x5A, 0x12, 0x34,
+                                             0xDE, 0xAD, 0xBE, 0xEF};
+
+  uint32_t flashTestAddress = (uint32_t)(uintptr_t)&flashTestPattern[0];
+
+  uint8_t buffer[8];
+
+  test_report(nvmctrl_read_flash(flashTestAddress, &buffer[0], 8),
+              "READING FLASH ADDRESS");
+
+  for (uint32_t i = 0; i < 8; i++) {
+    string formated;
+    char s[64];
+
+    if (!str_init(&formated, &s[0], 64, ""))
+      return;
+    str_format(&formated, "Expected Byte: %x Recieved Byte: %x",
+               flashTestPattern[i], buffer[i]);
+
+    test_report(flashTestPattern[i] == buffer[i], formated.chars);
+  }
+}
+
+// void test_nvmctrl_memory_info(void) {
+//   struct nvmCtrlParams nvmCtrl;
+//   uart_puts("========= NVM MEMORY INFORMATION =========\r\n");
+
+//   nvmctrl_get_memory_info(&nvmCtrl);
+
+//   char numpages[64];
+//   char pagesize[64];
+//   char capacity[64];
+//   int_to_string(nvmCtrl.numPages, numpages);
+//   int_to_string(nvmCtrl.pageSize, pagesize);
+//   int_to_string(nvmCtrl.capacity, capacity);
+
+//   uart_puts("Flash Pages: \t");
+//   uart_puts(numpages);
+//   uart_puts("\r\n");
+
+//   uart_puts("Flash Page Size: \t");
+//   uart_puts(pagesize);
+//   uart_puts("\r\n");
+
+//   uart_puts("Total Flash: \t");
+//   uart_puts(capacity);
+//   uart_puts("\r\n");
+
+//   uart_puts("SmartEEPROM: \t");
+
+//   uart_puts(nvmCtrl.smartEEPROM ? "True" : "False");
+//   uart_puts("\r\n");
+// }
 
 void test_ring_buffer(void) {
   uart_puts("========= RING BUFFER TEST =========\r\n");

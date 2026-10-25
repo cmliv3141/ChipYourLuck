@@ -2,20 +2,19 @@
 #include "board.h"
 #include <stdint.h>
 
-
 #define SYSTICK_MAX 0x00FFFFFF
 
-
-
-void sysTick_set_current_value(struct SysTickTimer *timer) {
+void sysTick_set_current_value(SysTickTimer *timer) {
+  //set current value to current time
   timer->currentTime = SysTick->VAL;
 }
 
-void sysTick_set_start_value(struct SysTickTimer *timer) {
+void sysTick_set_start_value(SysTickTimer *timer) {
+  //set start value
   timer->startTime = SysTick->VAL;
 }
 
-uint32_t sysTick_get_time_difference_us(struct SysTickTimer *timer) {
+uint32_t sysTick_get_time_difference_us(SysTickTimer *timer) {
 
   timer->currentTime = SysTick->VAL;
   uint32_t elapsed = timer->startTime - timer->currentTime;
@@ -28,15 +27,14 @@ uint32_t sysTick_get_time_difference_us(struct SysTickTimer *timer) {
   return microseconds;
 }
 
-void sysTick_init(struct SysTickTimer *timer) {
+void sysTick_init(SysTickTimer *timer) {
   // Check if SysTick is already enabled
   if ((SysTick->CTRL & SysTick_CTRL_ENABLE_Msk) == 0) {
-    
 
-    //set CPU clock source
+    // set CPU clock source
     SysTick->CTRL |= SysTick_CTRL_CLKSOURCE_Msk;
 
-    //set Load to max value of 24bit
+    // set Load to max value of 24bit
 
     SysTick->LOAD = SYSTICK_MAX;
 
