@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-
 struct nvmCtrlParams {
   uint32_t numPages;
   uint32_t pageSize;
