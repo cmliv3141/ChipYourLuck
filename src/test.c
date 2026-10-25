@@ -20,31 +20,48 @@ static void test_report(bool passed, const char *message) {
 void test_nvmctrl_write_page(void) {
   uart_puts("\r\n========= NVMCTRL FLASH WRITE TEST =========\r\n");
 
-  bool unlocked = (NVMCTRL_REGS->NVMCTRL_RUNLOCK * (1u << 31) != 0);
+  bool unlocked = (NVMCTRL_REGS->NVMCTRL_RUNLOCK & (1UL << 31)) != 0U;
 
-  if (unlocked) {
-    test_report(nvmctrl_erase_block(0x000FE000U), "NVMCTRL ERASE BLOCK");
-  } else {
-    uart_puts("[FAILURE] BLOCK IS LOCKED BY SMARTEEPROM\r\n");
+  if (!unlocked) {
+    uart_puts("[FAILURE] BLOCK IS LOCKED\r\n");
+    return;
   }
+
+  if (!nvmctrl_erase_block(0x000FE000U)) {
+    test_report(false, "NVMCTRL ERASE BLOCK");
+    return;
+  }
+
+  test_report(true, "NVMCTRL ERASE BLOCK");
 
   uint8_t testData[7] = {0xDE, 0xAD, 0xBE, 0xEF, 0x12, 0x34, 0x56};
 
-  test_report(nvmctrl_write_page(0x000FE000U, &testData[0], 7),
-              "NVMCTRL WRITE PAGE");
+  if (!nvmctrl_write_page(0x000FE000U, testData, sizeof(testData))) {
+    test_report(false, "NVMCTRL WRITE PAGE");
+    return;
+  }
 
-  uint8_t readData[7];
-  test_report(nvmctrl_read_flash(0x000FE000U, &readData[0], 7),
-              "NVMCTRL READ DATA");
+  test_report(true, "NVMCTRL WRITE PAGE");
 
-  for (uint32_t i = 0; i < 8; i++) {
+  uint8_t readData[sizeof(testData)];
+
+  if (!nvmctrl_read_flash(0x000FE000U, readData, sizeof(readData))) {
+    test_report(false, "NVMCTRL READ DATA");
+    return;
+  }
+
+  test_report(true, "NVMCTRL READ DATA");
+
+  for (uint32_t i = 0; i < sizeof(testData); i++) {
     string formated;
     char s[64];
 
-    if (!str_init(&formated, &s[0], 64, ""))
+    if (!str_init(&formated, s, sizeof(s), ""))
       return;
-    str_format(&formated, "Expected Byte: %x Recieved Byte: %x", testData[i],
-               readData[i]);
+
+    if (!str_format(&formated, "Expected Byte: %x Recieved Byte: %x",
+                    (unsigned int)testData[i], (unsigned int)readData[i]))
+      return;
 
     test_report(testData[i] == readData[i], formated.chars);
   }

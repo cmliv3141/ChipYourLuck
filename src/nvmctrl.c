@@ -15,8 +15,8 @@
 #define NVM_STORAGE_END 0x00100000U
 #define NVM_BLOCK_SIZE 8192U
 
-#define NVM_READY_TIMEOUT_US 50000U  // 50 ms
-#define NVM_ERASE_TIMEOUT_US 500000U // 250ms
+#define NVM_READY_TIMEOUT_US 50000U // 50 ms
+#define NVM_ERASE_TIMEOUT_US 50000U // 250ms
 
 static bool nvmctrl_wait_ready() {
   SysTickTimer timer;
@@ -131,6 +131,27 @@ bool nvmctrl_erase_block(uint32_t blockAddress) {
   }
 
   return true;
+}
+
+static void nvmctrl_cmcc_invalidate(void) {
+  bool enabled =
+      (CMCC_REGS->CMCC_CTRL & CMCC_CTRL_CEN_Msk) >> CMCC_CTRL_CEN_Pos;
+
+  if (enabled) {
+    CMCC_REGS->CMCC_CTRL &= ~CMCC_CTRL_CEN_Msk;
+
+    while ((CMCC_REGS->CMCC_SR & CMCC_SR_CSTS_Msk) != 0u)
+      ;
+  }
+
+  CMCC_REGS->CMCC_MAINT0 = CMCC_MAINT0_INVALL_Msk;
+
+  if (enabled) {
+    CMCC_REGS->CMCC_CTRL = CMCC_CTRL_CEN_Msk;
+  }
+
+  __DSB();
+  __ISB();
 }
 
 bool nvmctrl_write_page(uint32_t pageAddress, const uint8_t *data,
@@ -253,6 +274,9 @@ bool nvmctrl_write_page(uint32_t pageAddress, const uint8_t *data,
 
   // clear done flag
   NVMCTRL_REGS->NVMCTRL_INTFLAG = NVMCTRL_INTFLAG_DONE_Msk;
+
+  // reset the cache
+  nvmctrl_cmcc_invalidate();
 
   // verify all contents correctly writen
 
