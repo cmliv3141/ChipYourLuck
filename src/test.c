@@ -3,8 +3,8 @@
 #include "clock.h"
 #include "nvmctrl.h"
 #include "ring_buffer.h"
+#include "string_utils.h"
 #include "uart.h"
-
 
 static void test_report(bool passed, const char *message) {
   if (passed) {
@@ -17,98 +17,108 @@ static void test_report(bool passed, const char *message) {
   uart_puts("\r\n");
 }
 
+void test_nvmctrl_write_page(void) {
+  uart_puts("\r\n========= NVMCTRL FLASH WRITE TEST =========\r\n");
 
-//TODO - REPLACE
-// A manual function to calculate string length
-int mystrlen(char *str) {
-  int len = 0;
-  while (str[len] != '\0') {
-    len++;
+  bool unlocked = (NVMCTRL_REGS->NVMCTRL_RUNLOCK * (1u << 31) != 0);
+
+  if (unlocked) {
+    test_report(nvmctrl_erase_block(0x000FE000U), "NVMCTRL ERASE BLOCK");
+  } else {
+    uart_puts("[FAILURE] BLOCK IS LOCKED BY SMARTEEPROM\r\n");
   }
-  return len;
+
+  uint8_t testData[7] = {0xDE, 0xAD, 0xBE, 0xEF, 0x12, 0x34, 0x56};
+
+  test_report(nvmctrl_write_page(0x000FE000U, &testData[0], 7),
+              "NVMCTRL WRITE PAGE");
+
+  uint8_t readData[7];
+  test_report(nvmctrl_read_flash(0x000FE000U, &readData[0], 7),
+              "NVMCTRL READ DATA");
+
+  for (uint32_t i = 0; i < 8; i++) {
+    string formated;
+    char s[64];
+
+    if (!str_init(&formated, &s[0], 64, ""))
+      return;
+    str_format(&formated, "Expected Byte: %x Recieved Byte: %x", testData[i],
+               readData[i]);
+
+    test_report(testData[i] == readData[i], formated.chars);
+  }
 }
 
-// A manual function to reverse a string in place
-void reverse(char *str) {
-  int i = 0;
-  int j = mystrlen(str) - 1;
-  while (i < j) {
-    char temp = str[i];
-    str[i] = str[j];
-    str[j] = temp;
-    i++;
-    j--;
+void test_nvmctrl_erase_flash(void) {
+  uart_puts("\r\n========= NVMCTRL FLASH ERASE TEST =========\r\n");
+
+  bool unlocked = (NVMCTRL_REGS->NVMCTRL_RUNLOCK * (1u << 31) != 0);
+
+  if (unlocked) {
+    test_report(nvmctrl_erase_block(0x000FE000U), "NVMCTRL ERASE BLOCK");
+  } else {
+    uart_puts("[FAILURE] BLOCK IS LOCKED BY SMARTEEPROM\r\n");
   }
 }
 
-// The conversion function
-void int_to_string(int num, char *str) {
-  int i = 0;
-  int is_negative = 0;
+void test_nvmctrl_read_flash(void) {
 
-  // Handle 0 explicitly, otherwise the loop will be skipped
-  if (num == 0) {
-    str[i++] = '0';
-    str[i] = '\0';
-    return;
+  uart_puts("\r\n========= NVMCTRL FLASH READ TEST =========\r\n");
+
+  static const uint8_t flashTestPattern[] = {0xA5, 0x5A, 0x12, 0x34,
+                                             0xDE, 0xAD, 0xBE, 0xEF};
+
+  uint32_t flashTestAddress = (uint32_t)(uintptr_t)&flashTestPattern[0];
+
+  uint8_t buffer[8];
+
+  test_report(nvmctrl_read_flash(flashTestAddress, &buffer[0], 8),
+              "READING FLASH ADDRESS");
+
+  for (uint32_t i = 0; i < 8; i++) {
+    string formated;
+    char s[64];
+
+    if (!str_init(&formated, &s[0], 64, ""))
+      return;
+    str_format(&formated, "Expected Byte: %x Recieved Byte: %x",
+               flashTestPattern[i], buffer[i]);
+
+    test_report(flashTestPattern[i] == buffer[i], formated.chars);
   }
-
-  // Handle negative numbers
-  // Note: This works for most numbers, but INT_MIN requires overflow care
-  if (num < 0) {
-    is_negative = 1;
-    num = -num;
-  }
-
-  // Process individual digits from right to left
-  while (num > 0) {
-    int rem = num % 10;
-    str[i++] = rem + '0'; // Convert single digit to ASCII character
-    num = num / 10;
-  }
-
-  // Append negative sign if necessary
-  if (is_negative) {
-    str[i++] = '-';
-  }
-
-  // Append the null terminator to make it a valid string
-  str[i] = '\0';
-
-  // Reverse the string since digits were extracted backward
-  reverse(str);
 }
 
-void test_nvmctrl_memory_info(void) {
-  struct nvmCtrlParams nvmCtrl;
-  uart_puts("========= NVM MEMORY INFORMATION =========\r\n");
+// void test_nvmctrl_memory_info(void) {
+//   struct nvmCtrlParams nvmCtrl;
+//   uart_puts("========= NVM MEMORY INFORMATION =========\r\n");
 
-  nvmctrl_get_memory_info(&nvmCtrl);
+//   nvmctrl_get_memory_info(&nvmCtrl);
 
-  char numpages[64];
-  char pagesize[64];
-  char capacity[64];
-  int_to_string(nvmCtrl.numPages, numpages);  
-  int_to_string(nvmCtrl.pageSize, pagesize);  
-  int_to_string(nvmCtrl.capacity, capacity);  
+//   char numpages[64];
+//   char pagesize[64];
+//   char capacity[64];
+//   int_to_string(nvmCtrl.numPages, numpages);
+//   int_to_string(nvmCtrl.pageSize, pagesize);
+//   int_to_string(nvmCtrl.capacity, capacity);
 
-  uart_puts("Flash Pages: \t");
-  uart_puts(numpages);
-  uart_puts("\r\n");
+//   uart_puts("Flash Pages: \t");
+//   uart_puts(numpages);
+//   uart_puts("\r\n");
 
-  uart_puts("Flash Page Size: \t");
-  uart_puts(pagesize);
-  uart_puts("\r\n");
+//   uart_puts("Flash Page Size: \t");
+//   uart_puts(pagesize);
+//   uart_puts("\r\n");
 
-  uart_puts("Total Flash: \t");
-  uart_puts(capacity);
-  uart_puts("\r\n");
+//   uart_puts("Total Flash: \t");
+//   uart_puts(capacity);
+//   uart_puts("\r\n");
 
-  uart_puts("SmartEEPROM: \t");
+//   uart_puts("SmartEEPROM: \t");
 
-  uart_puts(nvmCtrl.smartEEPROM ? "True" : "False");
-  uart_puts("\r\n");
-}
+//   uart_puts(nvmCtrl.smartEEPROM ? "True" : "False");
+//   uart_puts("\r\n");
+// }
 
 void test_ring_buffer(void) {
   uart_puts("========= RING BUFFER TEST =========\r\n");

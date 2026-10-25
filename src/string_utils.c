@@ -1,4 +1,5 @@
 #include "string_utils.h"
+#include "conversion.h"
 #include <stdarg.h>
 #include <stddef.h>
 
@@ -11,13 +12,9 @@ static bool str_set_length(string *str, uint32_t newLength) {
   return true;
 }
 
-uint32_t str_len(const string *str) {
-  return str == NULL ? 0U : str->length;
-}
+uint32_t str_len(const string *str) { return str == NULL ? 0U : str->length; }
 
-uint32_t str_cap(const string *str) {
-  return str == NULL ? 0U : str->capacity;
-}
+uint32_t str_cap(const string *str) { return str == NULL ? 0U : str->capacity; }
 
 uint32_t char_arr_len(const char *s) {
   uint32_t readIndex = 0;
@@ -66,9 +63,7 @@ int str_index_of(const string *str, char search) {
   return -1;
 }
 
-static bool char_isNumber(char c) {
-  return c >= '0' && c <= '9';
-}
+static bool char_isNumber(char c) { return c >= '0' && c <= '9'; }
 
 static int str_get_base(const string *str, int *index) {
   if (str == NULL || str->chars == NULL || index == NULL || str->length == 0)
@@ -145,8 +140,8 @@ bool str_parse_uint32(const string *str, uint32_t *out) {
 }
 
 bool str_format(string *outStr, const char *format, ...) {
-  if (outStr == NULL || outStr->chars == NULL ||
-      outStr->capacity == 0 || format == NULL)
+  if (outStr == NULL || outStr->chars == NULL || outStr->capacity == 0 ||
+      format == NULL)
     return false;
 
   va_list args;
@@ -191,6 +186,56 @@ bool str_format(string *outStr, const char *format, ...) {
         if (outIndex >= outStr->capacity - 1U)
           goto format_fail;
         outStr->chars[outIndex++] = '%';
+        break;
+      }
+      case 'x': {
+        if ((outIndex + 10U) >= outStr->capacity - 1U)
+          goto format_fail;
+        uintptr_t val = (uintptr_t)va_arg(args, uintptr_t);
+
+        string temp;
+        char buffer[2 * sizeof(uintptr_t) + 3];
+        if (!str_init(&temp, &buffer[0], 10, "")) {
+          goto format_fail;
+        }
+
+        if (!uintptr_to_hex_string(&temp, val))
+          goto format_fail;
+        if (temp.length > outStr->capacity - 1U - outIndex)
+          goto format_fail;
+
+        for (uint32_t i = 0; i < temp.length; i++) {
+          outStr->chars[outIndex++] = temp.chars[i];
+        }
+
+        break;
+      }
+
+      case 'd': {
+
+        uint32_t sizeInt = (sizeof(int) * 2) + 1;
+
+        int val = (int)va_arg(args, int);
+
+        if (sizeInt >= outStr->capacity - 1U)
+          goto format_fail;
+
+        string temp;
+        char buffer[sizeInt];
+
+        if (!str_init(&temp, &buffer[0], sizeInt, "")) {
+          goto format_fail;
+        }
+
+        if (!int_to_string(&temp, val))
+          goto format_fail;
+        if (temp.length > outStr->capacity - 1U - outIndex)
+          goto format_fail;
+
+        for (uint32_t i = 0; i < temp.length; i++) {
+          outStr->chars[outIndex++] = temp.chars[i];
+        }
+
         break;
       }
       default: {
@@ -249,8 +294,8 @@ bool str_copy(string *strTo, const string *strFrom) {
 }
 
 bool str_concat_str(const string *str1, const string *str2, string *outStr) {
-  if (str1 == NULL || str2 == NULL || outStr == NULL ||
-      str1->chars == NULL || str2->chars == NULL || outStr->chars == NULL)
+  if (str1 == NULL || str2 == NULL || outStr == NULL || str1->chars == NULL ||
+      str2->chars == NULL || outStr->chars == NULL)
     return false;
 
   uint32_t str1Len = str_len(str1);
@@ -312,6 +357,29 @@ void str_reverse(string *str) {
     char c_end = str->chars[end];
     str->chars[start] = c_end;
     str->chars[end] = c_start;
+    start++;
+    end--;
+  }
+}
+
+void str_reverse_char(char *str, uint32_t len) {
+
+  if (str == NULL)
+    return;
+
+  if (len <= 1)
+    return;
+
+  uint32_t start = 0;
+  uint32_t end = len - 1;
+
+  while (start < end) {
+    char c_start = str[start];
+    char c_end = str[end];
+
+    str[start] = c_end;
+    str[end] = c_start;
+
     start++;
     end--;
   }

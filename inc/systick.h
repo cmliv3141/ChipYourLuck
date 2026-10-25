@@ -2,19 +2,19 @@
 #define INC_SYSTICK
 #include <stdint.h>
 
-struct SysTickTimer{
+typedef struct{
     uint32_t startTime;
     uint32_t currentTime;
-};
+}SysTickTimer;
 
 
-void sysTick_set_current_value(struct SysTickTimer* timer);
+void sysTick_set_current_value(SysTickTimer* timer);
 
-void sysTick_set_start_value(struct SysTickTimer* timer);
+void sysTick_set_start_value(SysTickTimer* timer);
 
-uint32_t sysTick_get_time_difference_us(struct SysTickTimer* timer);
+uint32_t sysTick_get_time_difference_us(SysTickTimer* timer);
 
 
-void sysTick_init(struct SysTickTimer* timer);
+void sysTick_init(SysTickTimer* timer);
 
 #endif /* INC_SYSTICK */

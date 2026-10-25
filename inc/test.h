@@ -4,6 +4,9 @@
 #include <stdint.h>
 
 static void test_report(bool passed, const char *message);
+void test_nvmctrl_write_page(void);
+void test_nvmctrl_erase_flash(void);
+void test_nvmctrl_read_flash(void);
 void test_nvmctrl_memory_info(void);
 void test_ring_buffer(void);
 void test_dpll0_configuration(void);
