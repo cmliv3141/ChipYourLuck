@@ -7,3 +7,9 @@ target_link_options(
     PRIVATE
     "-Wl,--script,${LOCAL_LINKER_SCRIPT}"
 )
+
+target_include_directories(
+    ChipYourLuck_working_working_toolchain_compile
+    PRIVATE
+    "${CMAKE_CURRENT_LIST_DIR}/../../../inc"
+)

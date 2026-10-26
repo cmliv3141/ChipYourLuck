@@ -1,7 +1,9 @@
-#include "uart.h"
 #include "board.h"
-#include "clock.h"
-#include "ring_buffer.h"
+
+#include "drivers/uart.h"
+#include "drivers/clock.h"
+
+#include "utils/ring_buffer.h"
 
 #include <stdint.h>
 #include <xc.h>

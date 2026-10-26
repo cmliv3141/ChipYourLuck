@@ -1,5 +1,7 @@
-#include "systick.h"
 #include "board.h"
+
+#include "drivers/systick.h"
+
 #include <stdint.h>
 
 #define SYSTICK_MAX 0x00FFFFFF
