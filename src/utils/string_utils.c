@@ -1,5 +1,5 @@
-#include "string_utils.h"
-#include "conversion.h"
+#include "utils/string_utils.h"
+#include "utils/conversion.h"
 #include <stdarg.h>
 #include <stddef.h>
 
@@ -194,8 +194,8 @@ bool str_format(string *outStr, const char *format, ...) {
         uintptr_t val = (uintptr_t)va_arg(args, uintptr_t);
 
         string temp;
-        char buffer[2 * sizeof(uintptr_t) + 3];
-        if (!str_init(&temp, &buffer[0], 10, "")) {
+        char buffer[2 * sizeof(uintptr_t) + 4];
+        if (!str_init(&temp, &buffer[0], 11, "")) {
           goto format_fail;
         }
 

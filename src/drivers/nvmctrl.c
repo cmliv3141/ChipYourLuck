@@ -1,5 +1,5 @@
-#include "nvmctrl.h"
-#include "systick.h"
+#include "drivers/nvmctrl.h"
+#include "drivers/systick.h"
 
 // struct nvmCtrlParams {
 //     uint32_t numPages;
@@ -7,23 +7,15 @@
 //     uint32_t capacity;
 //     bool smartEEPROM;
 // };
-#define FLASH_START 0x00000000U
-#define FLASH_END 0x000FFFFFU
-
-#define NVM_STORAGE_START 0x000FE000U
-#define NVM_STORAGE_SIZE 0x00002000U
-#define NVM_STORAGE_END 0x00100000U
-#define NVM_BLOCK_SIZE 8192U
-
-#define NVM_READY_TIMEOUT_US 50000U // 50 ms
-#define NVM_ERASE_TIMEOUT_US 50000U // 250ms
 
 static bool nvmctrl_wait_ready() {
+  //create timer
   SysTickTimer timer;
   sysTick_init(&timer);
 
   bool timedOut = true;
 
+  //loop and check for ready flag
   while (sysTick_get_time_difference_us(&timer) < NVM_READY_TIMEOUT_US) {
     if ((NVMCTRL_REGS->NVMCTRL_STATUS & NVMCTRL_STATUS_READY_Msk) != 0) {
       timedOut = false;
@@ -31,6 +23,7 @@ static bool nvmctrl_wait_ready() {
     }
   }
 
+  //return if timedout
   return !timedOut;
 }
 
@@ -56,12 +49,44 @@ static bool nvmctrl_wait_done(uint32_t errorMask) {
   return !timedOut;
 }
 
+static void nvmctrl_cmcc_invalidate(void) {
+
+  //check if cache in enabled
+  bool enabled =
+      (CMCC_REGS->CMCC_CTRL & CMCC_CTRL_CEN_Msk) >> CMCC_CTRL_CEN_Pos;
+
+  if (enabled) {
+
+    //disable the cache
+    CMCC_REGS->CMCC_CTRL &= ~CMCC_CTRL_CEN_Msk;
+
+    //wait for it to finish
+    while ((CMCC_REGS->CMCC_SR & CMCC_SR_CSTS_Msk) != 0u)
+      ;
+  }
+
+  //invalidate the cache
+  CMCC_REGS->CMCC_MAINT0 = CMCC_MAINT0_INVALL_Msk;
+
+  //reenable the cache
+  if (enabled) {
+    CMCC_REGS->CMCC_CTRL = CMCC_CTRL_CEN_Msk;
+  }
+
+  //wait for synchronization
+  __DSB();
+  __ISB();
+}
+
 int nvmctrl_get_memory_info(struct nvmCtrlParams *nvmCtrl) {
+  //make sure struct is defined
   if (nvmCtrl == NULL)
     return 1;
 
+  //read the parameters from the NVM controller
   uint32_t paramConfiguration = NVMCTRL_REGS->NVMCTRL_PARAM;
 
+  //extract the values
   nvmCtrl->numPages =
       (paramConfiguration & NVMCTRL_PARAM_NVMP_Msk) >> NVMCTRL_PARAM_NVMP_Pos;
   nvmCtrl->pageSize = 8U << ((paramConfiguration & NVMCTRL_PARAM_PSZ_Msk) >>
@@ -74,13 +99,16 @@ int nvmctrl_get_memory_info(struct nvmCtrlParams *nvmCtrl) {
 }
 
 bool nvmctrl_read_flash(uint32_t address, uint8_t *buff, uint32_t length) {
+  //Bounds checking and data validation
   if (buff == NULL || length == 0 || address >= FLASH_SIZE ||
       length > FLASH_SIZE - address) {
     return false;
   }
 
+  //create a byte pointer for easier data manipulation
   const uint8_t *flashPtr = (const uint8_t *)(uintptr_t)address;
 
+  //loop through the flash reading and storing each value into the buffer
   for (uint32_t i = 0; i < length; i++) {
     buff[i] = flashPtr[i];
   }
@@ -89,38 +117,49 @@ bool nvmctrl_read_flash(uint32_t address, uint8_t *buff, uint32_t length) {
 }
 
 bool nvmctrl_erase_block(uint32_t blockAddress) {
+  //bounds and data checking
   if (blockAddress < NVM_STORAGE_START || blockAddress >= NVM_STORAGE_END ||
       (blockAddress % NVM_BLOCK_SIZE) != 0U) {
     return false;
   }
 
+  //wait for ready flag
   if (!nvmctrl_wait_ready())
     return false;
 
+  //error mask with all errors we are interested in
   uint32_t errorMask = NVMCTRL_INTFLAG_ADDRE_Msk | NVMCTRL_INTFLAG_PROGE_Msk |
                        NVMCTRL_INTFLAG_LOCKE_Msk | NVMCTRL_INTFLAG_NVME_Msk;
 
+  //clear error and done flags
   NVMCTRL_REGS->NVMCTRL_INTFLAG = errorMask | NVMCTRL_INTFLAG_DONE_Msk;
 
+  //set the proper address
   NVMCTRL_REGS->NVMCTRL_ADDR = blockAddress;
 
+  //send erase and execute command
   uint32_t cntrlBConfig = NVMCTRL_CTRLB_CMD_EB | NVMCTRL_CTRLB_CMDEX_KEY;
 
   NVMCTRL_REGS->NVMCTRL_CTRLB = cntrlBConfig;
 
+  //wait for done and ready
   if (!nvmctrl_wait_done(errorMask))
     return false;
 
   if (!nvmctrl_wait_ready())
     return false;
 
+  //check for errors
   if ((NVMCTRL_REGS->NVMCTRL_INTFLAG & errorMask) != 0)
     return false;
 
+  //reset the done flag
   NVMCTRL_REGS->NVMCTRL_INTFLAG = NVMCTRL_INTFLAG_DONE_Msk;
 
+  //create byte pointer for easier data manipulation
   const uint8_t *blockPtr = (const uint8_t *)(uintptr_t)(blockAddress);
 
+  //verify the erase erased everything
   uint32_t index = 0;
   while (index < NVM_BLOCK_SIZE) {
     if (blockPtr[index] != 0xFF) {
@@ -130,28 +169,10 @@ bool nvmctrl_erase_block(uint32_t blockAddress) {
     index++;
   }
 
+  // clear cache to prevent stale cache problems
+  nvmctrl_cmcc_invalidate();
+
   return true;
-}
-
-static void nvmctrl_cmcc_invalidate(void) {
-  bool enabled =
-      (CMCC_REGS->CMCC_CTRL & CMCC_CTRL_CEN_Msk) >> CMCC_CTRL_CEN_Pos;
-
-  if (enabled) {
-    CMCC_REGS->CMCC_CTRL &= ~CMCC_CTRL_CEN_Msk;
-
-    while ((CMCC_REGS->CMCC_SR & CMCC_SR_CSTS_Msk) != 0u)
-      ;
-  }
-
-  CMCC_REGS->CMCC_MAINT0 = CMCC_MAINT0_INVALL_Msk;
-
-  if (enabled) {
-    CMCC_REGS->CMCC_CTRL = CMCC_CTRL_CEN_Msk;
-  }
-
-  __DSB();
-  __ISB();
 }
 
 bool nvmctrl_write_page(uint32_t pageAddress, const uint8_t *data,
@@ -287,3 +308,5 @@ bool nvmctrl_write_page(uint32_t pageAddress, const uint8_t *data,
 
   return true;
 }
+
+

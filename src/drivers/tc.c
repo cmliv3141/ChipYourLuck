@@ -1,7 +1,7 @@
-#include "tc.h"
-#include "clock.h"
-#include "led.h"
-#include "systick.h"
+#include "drivers/tc.h"
+#include "drivers/clock.h"
+#include "drivers/led.h"
+#include "drivers/systick.h"
 
 #include <stdbool.h>
 

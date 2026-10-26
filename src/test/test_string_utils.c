@@ -1,6 +1,9 @@
-#include "test_string_utils.h"
-#include "string_utils.h"
-#include "uart.h"
+#include "drivers/uart.h"
+
+#include "utils/string_utils.h"
+
+#include "test/test_string_utils.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 #include <stddef.h>

@@ -1,20 +1,358 @@
-#include "test.h"
 #include "board.h"
-#include "clock.h"
-#include "nvmctrl.h"
-#include "ring_buffer.h"
-#include "string_utils.h"
-#include "uart.h"
 
-static void test_report(bool passed, const char *message) {
-  if (passed) {
-    uart_puts("[PASS] ");
-  } else {
-    uart_puts("[FAIL] ");
+#include "drivers/clock.h"
+#include "drivers/nvmctrl.h"
+#include "drivers/uart.h"
+
+#include "storage/flash_storage.h"
+
+#include "utils/crc32.h"
+#include "utils/ring_buffer.h"
+#include "utils/string_utils.h"
+
+
+#include "test/test.h"
+#include "test/test_storage_flash.h"
+
+#include <stdarg.h>
+
+void test_report(bool passed, const char *format, ...) {
+  if (format == NULL)
+    return;
+
+  char buffer[128];
+
+  // Initialize variable argument list
+  va_list args;
+  va_start(args, format);
+
+  string formated;
+  str_init(&formated, &buffer[0], 128, "");
+
+  // Format the string
+  if (!str_format(&formated, format, args)) {
+    uart_puts("Formatting error");
+    va_end(args);
+    return;
   }
 
-  uart_puts(message);
+  // Clean up argument list
+  va_end(args);
+
+  // Print result
+  uart_puts(passed ? "[PASS] " : "[FAIL] ");
+
+  uart_puts(formated.chars);
+
   uart_puts("\r\n");
+}
+
+void test_storage_flash(void)
+{
+  test_flash_storage();
+}
+
+
+void test_crcc_calculation(void) {
+  const uint8_t testData[] = "123456789";
+
+  uint32_t result = crc32_calculate(testData, 9);
+
+  test_report(result == 0xCBF43926U, "CRC32 EXPECTED: 0x%x ACTUAL: 0x%x",
+              0xCBF43926U, result);
+}
+
+void test_flash_read_record_multi_page(void) {
+  uart_puts("\r\n========= FLASH READ MULTI PAGE RECORD TEST =========\r\n");
+
+  bool unlocked = (NVMCTRL_REGS->NVMCTRL_RUNLOCK & (1UL << 31)) != 0U;
+
+  if (!unlocked) {
+    uart_puts("[FAILURE] BLOCK IS LOCKED\r\n");
+    return;
+  }
+
+  if (!nvmctrl_erase_block(NVM_STORAGE_START)) {
+    test_report(false, "NVMCTRL ERASE BLOCK");
+    return;
+  }
+
+  uint8_t testPayload[(FLASH_PAGE_SIZE * 5 - (sizeof(FlashRecordHeader) + 15))];
+
+  for (uint32_t i = 0; i < sizeof(testPayload); i++) {
+    testPayload[i] = 0xAA;
+  }
+
+  test_report(flash_write_record(&testPayload[0], sizeof(testPayload),
+                                 FLASH_STORAGE_TYPE_SETTINGS),
+              "FLASH WRITE RECORD");
+
+  uint8_t readData[FLASH_PAGE_SIZE * 5];
+
+  uint32_t bytesRead;
+  test_report(flash_read_record(NVM_STORAGE_START, readData,
+                                FLASH_PAGE_SIZE * 5, &bytesRead),
+              "FLASH RECORD READ\r\n");
+
+  char buff[256];
+  string format;
+
+  str_init(&format, &buff[0], 256, "");
+
+  for (uint32_t bufferIndex = 0; bufferIndex < bytesRead; bufferIndex++) {
+    if (bufferIndex < sizeof(FlashRecordHeader)) {
+      const uint8_t byte = readData[bufferIndex];
+
+      str_format(&format, "HEADER: READ BYTE: %x \r\n", byte);
+
+      uart_puts(format.chars);
+    } else if (bufferIndex >= sizeof(FlashRecordHeader) &&
+               bufferIndex <
+                   (sizeof(FlashRecordHeader) + sizeof(testPayload))) {
+      const uint8_t byte = readData[bufferIndex];
+
+      if (byte != 0xAA) {
+        str_format(
+            &format,
+            "PAYLOAD: READ BYTE: %x \t EXPECTED BYTE: %x & ADDRESS: %x\r\n",
+            byte, 0xAA, (NVM_STORAGE_START + bufferIndex));
+        uart_puts(format.chars);
+        return;
+      }
+
+      if (bufferIndex % 512 == 0) {
+        str_format(&format, "PAYLOAD: PAGE %d VERIFIED \r\n",
+                   bufferIndex / 512);
+        uart_puts(format.chars);
+      } else {
+        break;
+      }
+    }
+  }
+}
+
+void test_flash_write_record_multi_page(void) {
+  uart_puts("\r\n========= FLASH WRITE MULTI PAGE RECORD TEST =========\r\n");
+
+  bool unlocked = (NVMCTRL_REGS->NVMCTRL_RUNLOCK & (1UL << 31)) != 0U;
+
+  if (!unlocked) {
+    uart_puts("[FAILURE] BLOCK IS LOCKED\r\n");
+    return;
+  }
+
+  if (!nvmctrl_erase_block(NVM_STORAGE_START)) {
+    test_report(false, "NVMCTRL ERASE BLOCK");
+    return;
+  }
+
+  uint8_t testPayload[(FLASH_PAGE_SIZE * 5 - (sizeof(FlashRecordHeader) + 15))];
+
+  for (uint32_t i = 0; i < sizeof(testPayload); i++) {
+    testPayload[i] = 0xAA;
+  }
+
+  test_report(flash_write_record(&testPayload[0], sizeof(testPayload),
+                                 FLASH_STORAGE_TYPE_SETTINGS),
+              "FLASH WRITE RECORD");
+
+  uint8_t readData[FLASH_PAGE_SIZE * 5];
+
+  if (!nvmctrl_read_flash(NVM_STORAGE_START, &readData[0],
+                          FLASH_PAGE_SIZE * 5)) {
+    test_report(false, "READING FLASH STORAGE");
+  }
+
+  char buff[64];
+  string format;
+
+  str_init(&format, &buff[0], 64, "");
+
+  for (uint32_t bufferIndex = 0; bufferIndex < FLASH_PAGE_SIZE * 5;
+       bufferIndex++) {
+    if (bufferIndex < sizeof(FlashRecordHeader)) {
+      const uint8_t byte = readData[bufferIndex];
+
+      str_format(&format, "HEADER: READ BYTE: %x \r\n", byte);
+
+      uart_puts(format.chars);
+
+    } else if (bufferIndex >= sizeof(FlashRecordHeader) &&
+               bufferIndex <
+                   (sizeof(FlashRecordHeader) + sizeof(testPayload))) {
+      const uint8_t byte = readData[bufferIndex];
+
+      if (byte != 0xAA) {
+        str_format(
+            &format,
+            "PAYLOAD: READ BYTE: %x \t EXPECTED BYTE: %x & ADDRESS: %x\r\n",
+            byte, 0xAA, (NVM_STORAGE_START + bufferIndex));
+        uart_puts(format.chars);
+      }
+
+      if (bufferIndex % 512 == 0) {
+        str_format(&format, "PAYLOAD: PAGE %d VERIFIED \r\n",
+                   bufferIndex / 512);
+        uart_puts(format.chars);
+      }
+
+    } else {
+      const uint8_t byte = readData[bufferIndex];
+
+      str_format(&format, "PAYLOAD: READ BYTE: %x \t EXPECTED BYTE: %x \r\n",
+                 byte, 0xFF);
+
+      uart_puts(format.chars);
+
+      if (bufferIndex ==
+          (sizeof(FlashRecordHeader) + sizeof(testPayload) + 2)) {
+        break;
+      }
+    }
+  }
+}
+
+void test_flash_write_record(void) {
+  uart_puts("\r\n========= FLASH WRITE RECORD TEST =========\r\n");
+
+  bool unlocked = (NVMCTRL_REGS->NVMCTRL_RUNLOCK & (1UL << 31)) != 0U;
+
+  if (!unlocked) {
+    uart_puts("[FAILURE] BLOCK IS LOCKED\r\n");
+    return;
+  }
+
+  if (!nvmctrl_erase_block(NVM_STORAGE_START)) {
+    test_report(false, "NVMCTRL ERASE BLOCK");
+    return;
+  }
+
+  uint8_t testPayload[] = {0x12, 0x34, 0x56, 0x78, 0xAA, 0xBB, 0xCC, 0xDD};
+
+  test_report(flash_write_record(&testPayload[0], sizeof(testPayload),
+                                 FLASH_STORAGE_TYPE_SETTINGS),
+              "FLASH WRITE RECORD");
+
+  uint8_t readData[FLASH_PAGE_SIZE];
+
+  if (!nvmctrl_read_flash(NVM_STORAGE_START, &readData[0], FLASH_PAGE_SIZE)) {
+    test_report(false, "READING FLASH STORAGE");
+  }
+
+  char buff[64];
+  string format;
+
+  str_init(&format, &buff[0], 64, "");
+
+  for (uint32_t bufferIndex = 0; bufferIndex < FLASH_PAGE_SIZE; bufferIndex++) {
+    if (bufferIndex < sizeof(FlashRecordHeader)) {
+      const uint8_t byte = readData[bufferIndex];
+
+      str_format(&format, "HEADER: READ BYTE: %x \r\n", byte);
+
+      uart_puts(format.chars);
+
+    } else if (bufferIndex >= sizeof(FlashRecordHeader) &&
+               bufferIndex <
+                   (sizeof(FlashRecordHeader) + sizeof(testPayload))) {
+      const uint8_t byte = readData[bufferIndex];
+
+      str_format(&format, "PAYLOAD: READ BYTE: %x \r\n", byte);
+
+      uart_puts(format.chars);
+    } else {
+      const uint8_t byte = readData[bufferIndex];
+
+      str_format(&format, "PAYLOAD: READ BYTE: %x \t EXPECTED BYTE: %x \r\n",
+                 byte, 0xFF);
+
+      uart_puts(format.chars);
+
+      if (bufferIndex ==
+          (sizeof(FlashRecordHeader) + sizeof(testPayload) + 2)) {
+        break;
+      }
+    }
+  }
+}
+
+void test_nvmctrl_get_next_page(void) {
+  uart_puts("\r\n========= NVMCTRL NEXT PAGE TEST =========\r\n");
+
+  bool unlocked = (NVMCTRL_REGS->NVMCTRL_RUNLOCK & (1UL << 31)) != 0U;
+
+  if (!unlocked) {
+    uart_puts("[FAILURE] BLOCK IS LOCKED\r\n");
+    return;
+  }
+
+  if (!nvmctrl_erase_block(NVM_STORAGE_START)) {
+    test_report(false, "NVMCTRL ERASE BLOCK");
+    return;
+  }
+
+  test_report(true, "NVMCTRL ERASE BLOCK");
+
+  uint8_t testData[2] = {0xDE, 0xAE};
+
+  uint32_t pageIndex = 0;
+
+  uint32_t expectedPage = 0;
+
+  expectedPage = NVM_STORAGE_START + (FLASH_PAGE_SIZE * pageIndex);
+
+  uintptr_t nextPage = flash_find_next_page();
+
+  if (nextPage == 0U) {
+    test_report(false, "NVMCTRL NEXT PAGE \r\n EXPECTED: %x \r\n ACTUAL: %x",
+                expectedPage, nextPage);
+    return;
+  }
+
+  test_report(true, "NVMCTRL NEXT PAGE \r\n EXPECTED: %x \r\n ACTUAL: %x",
+              expectedPage, nextPage);
+
+  if (!nvmctrl_write_page(NVM_STORAGE_START, testData, sizeof(testData))) {
+    test_report(false, "NVMCTRL WRITE PAGE");
+    return;
+  }
+
+  test_report(true, "NVMCTRL WRITE PAGE");
+
+  nextPage = flash_find_next_page();
+
+  pageIndex++;
+  expectedPage = NVM_STORAGE_START + (FLASH_PAGE_SIZE * pageIndex);
+
+  if (nextPage == 0U) {
+    test_report(false, "NVMCTRL NEXT PAGE \r\n EXPECTED: %x \r\n ACTUAL: %x",
+                expectedPage, nextPage);
+    return;
+  }
+
+  test_report(true, "NVMCTRL NEXT PAGE \r\n EXPECTED: %x \r\n ACTUAL: %x",
+              expectedPage, nextPage);
+
+  uint32_t numPages = NVM_STORAGE_SIZE / FLASH_PAGE_SIZE;
+
+  while (pageIndex < numPages) {
+    expectedPage = NVM_STORAGE_START + (FLASH_PAGE_SIZE * pageIndex);
+    if (!nvmctrl_write_page(expectedPage, testData, sizeof(testData)))
+      return;
+    pageIndex++;
+  }
+
+  expectedPage = 0u;
+  nextPage = flash_find_next_page();
+
+  if (nextPage != 0U) {
+    test_report(false, "NVMCTRL NEXT PAGE \r\n EXPECTED: %x \r\n ACTUAL: %x",
+                expectedPage, nextPage);
+    return;
+  }
+
+  test_report(true, "NVMCTRL NEXT PAGE \r\n EXPECTED: %x \r\n ACTUAL: %x",
+              expectedPage, nextPage);
 }
 
 void test_nvmctrl_write_page(void) {
@@ -27,7 +365,7 @@ void test_nvmctrl_write_page(void) {
     return;
   }
 
-  if (!nvmctrl_erase_block(0x000FE000U)) {
+  if (!nvmctrl_erase_block(NVM_STORAGE_START)) {
     test_report(false, "NVMCTRL ERASE BLOCK");
     return;
   }
@@ -36,7 +374,7 @@ void test_nvmctrl_write_page(void) {
 
   uint8_t testData[7] = {0xDE, 0xAD, 0xBE, 0xEF, 0x12, 0x34, 0x56};
 
-  if (!nvmctrl_write_page(0x000FE000U, testData, sizeof(testData))) {
+  if (!nvmctrl_write_page(NVM_STORAGE_START, testData, sizeof(testData))) {
     test_report(false, "NVMCTRL WRITE PAGE");
     return;
   }
@@ -45,7 +383,7 @@ void test_nvmctrl_write_page(void) {
 
   uint8_t readData[sizeof(testData)];
 
-  if (!nvmctrl_read_flash(0x000FE000U, readData, sizeof(readData))) {
+  if (!nvmctrl_read_flash(NVM_STORAGE_START, readData, sizeof(readData))) {
     test_report(false, "NVMCTRL READ DATA");
     return;
   }

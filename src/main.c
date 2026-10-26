@@ -1,18 +1,16 @@
-#include "clock.h"
-#include "conversion.h"
-#include "led.h"
-#include "string_utils.h"
-#include "systick.h"
-#include "tc.h"
-#include "test.h"
-#include "test_string_utils.h"
-#include "uart.h"
-
 #include <xc.h>
+
+#include "drivers/clock.h"
+#include "drivers/led.h"
+#include "drivers/tc.h"
+#include "drivers/uart.h"
+//#include "storage/flash_storage.h"
+
+#include "test/test.h"
 
 int main() {
 
-  // initilize led
+  // initalize led
   led_init();
 
   // setup GCLK 1 for UART
@@ -44,27 +42,43 @@ int main() {
 
   tc0_start();
 
-  // test_nvmctrl_memory_info();
+  // completed tests
+  {
+    // test_nvmctrl_memory_info();
 
-  // test_string_utils();
+    // test_string_utils();
 
-  // test_nvmctrl_read_flash();
+    // test_nvmctrl_read_flash();
 
-  // int i = 276;
+    // int i = 276;
 
-  // char buff[2 * sizeof(i) + 1];
+    // char buff[2 * sizeof(i) + 1];
 
-  // string s;
+    // string s;
 
-  // str_init(&s, &buff[0], 64, "");
+    // str_init(&s, &buff[0], 64, "");
 
-  // str_format(&s, "The Int: %d \r\n", i);
+    // str_format(&s, "The Int: %d \r\n", i);
 
-  // uart_puts(s.chars);
+    // uart_puts(s.chars);
 
-  // test_nvmctrl_erase_flash();
+    // test_nvmctrl_erase_flash();
 
-  test_nvmctrl_write_page();
+    // test_nvmctrl_write_page();
+
+    // test_nvmctrl_get_next_page();
+
+    // test_flash_write_record();
+
+    // test_flash_write_record_multi_page();
+
+    // test_flash_read_record_multi_page();
+
+    // test_crcc_calculation();
+  }
+
+  // current test
+  test_storage_flash();
 
   while (1) {
     if (uart_read_byte(&receivedBytes)) {

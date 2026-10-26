@@ -1,6 +1,7 @@
 #include "board.h"
-#include "led.h"
-#include "clock.h"
+
+#include "drivers/led.h"
+#include "drivers/clock.h"
 
 void led_init()
 {

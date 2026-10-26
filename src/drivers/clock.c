@@ -1,6 +1,8 @@
-#include "clock.h"
 #include "board.h"
-#include "systick.h"
+
+#include "drivers/clock.h"
+#include "drivers/systick.h"
+
 #include <stdbool.h>
 #include <stdint.h>
 
