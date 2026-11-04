@@ -4,9 +4,10 @@
 #include "drivers/led.h"
 #include "drivers/tc.h"
 #include "drivers/uart.h"
-//#include "storage/flash_storage.h"
+// #include "storage/flash_storage.h"
 
 #include "test/test.h"
+#include "test/test_storage_flash.h"
 
 int main() {
 
@@ -75,10 +76,12 @@ int main() {
     // test_flash_read_record_multi_page();
 
     // test_crcc_calculation();
+    // test_storage_flash();
+    // test_flash_storage_fault();
   }
 
   // current test
-  test_storage_flash();
+  test_flash_storage_analyze();
 
   while (1) {
     if (uart_read_byte(&receivedBytes)) {

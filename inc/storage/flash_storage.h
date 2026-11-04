@@ -5,11 +5,28 @@
 #include <stdbool.h>
 
 // storage types will continue to add more over time
+#define NUM_FLASH_STORAGE_TYPES 3u
+
 typedef enum : uint8_t {
   FLASH_STORAGE_TYPE_SETTINGS,
   FLASH_STORAGE_TYPE_GAME_HISTORY,
   FLASH_STORAGE_TYPE_IMAGE
 } RecordType;
+
+// flash page state struct
+typedef enum : uint8_t {
+  FLASH_STATE_ERASED,
+  FLASH_STATE_LIVE,
+  FLASH_STATE_STALE,
+  FLASH_STATE_INVALID
+} FlashState;
+
+// flash record
+typedef struct {
+  uintptr_t flashRecordAddress;
+  uint32_t flashRecordSize;
+  FlashState flashRecordState;
+} FlashRecord;
 
 // header struct for flash storage
 typedef struct {
@@ -39,11 +56,15 @@ bool flash_check_check_sum(const FlashRecordHeader *record, const uint8_t *data,
 
 uint32_t flash_find_required_num_pages(FlashRecordHeader *record);
 
-uintptr_t flash_find_free_pages(uint32_t numPages);
+uintptr_t flash_find_free_pages(uint32_t numPages, uint32_t blockIndex);
 
 bool flash_write_record(const uint8_t *payloadAddress,
                         const uint32_t payloadLength,
                         const RecordType recordType);
+
+bool test_flash_write_record(const uint8_t *payloadAddress,
+                             const uint32_t payloadLength,
+                             const RecordType recordType);
 
 bool flash_read_record(const uint32_t recordAddress, uint8_t *buffer,
                        uint32_t buffCap, uint32_t *bytesRead);
@@ -54,9 +75,15 @@ bool flash_read_record_header(const uint32_t recordAddress,
 bool flash_read_latest_record(RecordType recordType, uint8_t *buffer,
                               uint32_t buffCap, uint32_t *bytesRead);
 
+bool flash_storage_analyze(FlashRecord *flashRecordPtr, uint32_t capacity,
+                           uint32_t *len, uint32_t blockAddress);
+
 uintptr_t flash_find_record(RecordType recordType, uint32_t *sequenceNum);
 
 uint32_t flash_get_version_num(RecordType recordType);
 
 bool flash_check_valid_version_num(RecordType recordType, uint32_t versionNum);
+
+uintptr_t flash_get_block_address(uint32_t blockIndex);
+
 #endif /* INC_STORAGE_FLASH_STORAGE */

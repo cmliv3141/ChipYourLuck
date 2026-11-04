@@ -2,12 +2,13 @@
 #include "test/test.h"
 
 #include "drivers/nvmctrl.h"
-#include "uart.h"
 #include "storage/flash_storage.h"
+#include "uart.h"
 #include "utils/crc32.h"
 
-
 #include <string.h>
+
+#define TEST_FLASH_MAGIC 0x46535652U
 
 // Report a test and stop on the first failure.
 #define FLASH_TEST_REQUIRE(condition, ...)                                     \
@@ -119,15 +120,16 @@ void test_flash_storage(void) {
   FLASH_TEST_REQUIRE(flash_find_next_page() == base,
                      "First empty page is page 0");
 
-  FLASH_TEST_REQUIRE(flash_find_free_pages(1) == base, "Find one empty page");
+  FLASH_TEST_REQUIRE(flash_find_free_pages(1, 0) == base,
+                     "Find one empty page");
 
-  FLASH_TEST_REQUIRE(flash_find_free_pages(totalPages) == base,
+  FLASH_TEST_REQUIRE(flash_find_free_pages(totalPages, 0) == base,
                      "Find all 16 consecutive empty pages");
 
-  FLASH_TEST_REQUIRE(flash_find_free_pages(0) == 0,
+  FLASH_TEST_REQUIRE(flash_find_free_pages(0, 0) == 0,
                      "Reject request for zero pages");
 
-  FLASH_TEST_REQUIRE(flash_find_free_pages(totalPages + 1U) == 0,
+  FLASH_TEST_REQUIRE(flash_find_free_pages(totalPages + 1U, 0) == 0,
                      "Reject request exceeding storage size");
 
   sequenceNum = 123U;
@@ -436,13 +438,13 @@ void test_flash_storage(void) {
   FLASH_TEST_REQUIRE(flash_find_next_page() == base + 5U * pageSize,
                      "Find first free page in gap");
 
-  FLASH_TEST_REQUIRE(flash_find_free_pages(1) == base + 5U * pageSize,
+  FLASH_TEST_REQUIRE(flash_find_free_pages(1, 0) == base + 5U * pageSize,
                      "Find one-page free gap");
 
-  FLASH_TEST_REQUIRE(flash_find_free_pages(2) == base + 7U * pageSize,
+  FLASH_TEST_REQUIRE(flash_find_free_pages(2, 0) == base + 7U * pageSize,
                      "Skip gap too small for two pages");
 
-  FLASH_TEST_REQUIRE(flash_find_free_pages(10) == 0,
+  FLASH_TEST_REQUIRE(flash_find_free_pages(10, 0) == 0,
                      "Reject ten pages when no run is large enough");
 
   // Write another valid settings record into page 5.
@@ -493,7 +495,8 @@ void test_flash_storage(void) {
 
   FLASH_TEST_REQUIRE(flash_find_next_page() == 0, "No empty pages remain");
 
-  FLASH_TEST_REQUIRE(flash_find_free_pages(1) == 0, "No free page available");
+  FLASH_TEST_REQUIRE(flash_find_free_pages(1, 0) == 0,
+                     "No free page available");
 
   FLASH_TEST_REQUIRE(!flash_write_record(settingsA, sizeof(settingsA),
                                          FLASH_STORAGE_TYPE_SETTINGS),
@@ -513,5 +516,356 @@ void test_flash_storage(void) {
   uart_puts("ALL FLASH STORAGE TESTS PASSED\r\n");
   uart_puts("========================================\r\n");
 }
+
+void test_flash_fault(void) {
+  nvmctrl_erase_block(NVM_STORAGE_START);
+
+  uint8_t payload[FLASH_PAGE_SIZE];
+
+  for (uint16_t i = 0; i < FLASH_PAGE_SIZE; i++) {
+    payload[i] = 0xAA;
+  }
+
+  bool result;
+
+  result = flash_write_record(&payload[0], FLASH_PAGE_SIZE,
+                              FLASH_STORAGE_TYPE_SETTINGS);
+
+  FLASH_TEST_REQUIRE(result, "FLASH WRITE VALID RECORD\r\n");
+
+  uint8_t newPaylaod[FLASH_PAGE_SIZE * 5];
+
+  for (uint16_t i = 0; i < FLASH_PAGE_SIZE * 5; i++) {
+    newPaylaod[i] = 0xAA;
+  }
+
+  result = test_flash_write_record(&newPaylaod[0], FLASH_PAGE_SIZE * 5,
+                                   FLASH_STORAGE_TYPE_SETTINGS);
+
+  FLASH_TEST_REQUIRE(result, "FLASH WRITE FALT SIMULATION");
+
+  uint8_t buffer[FLASH_PAGE_SIZE * 2];
+  uint32_t bytesRead = 0;
+  result = flash_read_latest_record(FLASH_STORAGE_TYPE_SETTINGS, &buffer[0],
+                                    FLASH_PAGE_SIZE * 2, &bytesRead);
+
+  FLASH_TEST_REQUIRE(result, "FLASH READ VALID RECORD");
+
+  for (uint32_t i = 16; i < FLASH_PAGE_SIZE + 16; i++) {
+    if (buffer[i] != payload[i - 16]) {
+      FLASH_TEST_REQUIRE(false, "BYTE VERFY EXPECTED: %x RECIEVED %x",
+                         payload[i], buffer[i]);
+    }
+  }
+
+  uart_puts("\r\n========================================\r\n");
+  uart_puts("ALL FLASH STORAGE TESTS PASSED\r\n");
+  uart_puts("========================================\r\n");
+}
+
+static bool test_write_flash_record(uint32_t address, RecordType type,
+                                    uint32_t sequence, const uint8_t *payload,
+                                    uint16_t payloadLength, bool corruptCRC) {
+
+  if (payload == NULL || payloadLength == 0 || address < NVM_STORAGE_START ||
+      address >= NVM_STORAGE_END || address % FLASH_PAGE_SIZE != 0) {
+    return false;
+  }
+
+  uint32_t totalSize = sizeof(FlashRecordHeader) + payloadLength;
+  uint32_t numPages = (totalSize + FLASH_PAGE_SIZE - 1U) / FLASH_PAGE_SIZE;
+
+  if (numPages > (NVM_STORAGE_END - address) / FLASH_PAGE_SIZE)
+    return false;
+
+  uint32_t version = flash_get_version_num(type);
+
+  if (version == 0 || version > UINT8_MAX)
+    return false;
+
+  FlashRecordHeader header = {.magic = TEST_FLASH_MAGIC,
+                              .sequenceNumber = sequence,
+                              .checksum =
+                                  crc32_calculate(payload, payloadLength),
+                              .payloadLength = payloadLength,
+                              .version = (uint8_t)version,
+                              .storageType = type};
+
+  if (corruptCRC)
+    header.checksum ^= 0x01U;
+
+  const uint8_t *headerBytes = (const uint8_t *)&header;
+
+  // Program continuation pages first, header-bearing page last.
+  for (uint32_t order = 0; order < numPages; order++) {
+
+    uint32_t pageIndex = (order + 1U < numPages) ? order + 1U : 0U;
+
+    uint8_t pageBuffer[FLASH_PAGE_SIZE];
+
+    for (uint32_t i = 0; i < FLASH_PAGE_SIZE; i++) {
+
+      uint32_t offset = pageIndex * FLASH_PAGE_SIZE + i;
+
+      if (offset < sizeof(FlashRecordHeader)) {
+        pageBuffer[i] = headerBytes[offset];
+      } else if (offset < totalSize) {
+        pageBuffer[i] = payload[offset - sizeof(FlashRecordHeader)];
+      } else {
+        pageBuffer[i] = 0xFFU;
+      }
+    }
+
+    if (!nvmctrl_write_page(address + pageIndex * FLASH_PAGE_SIZE, pageBuffer,
+                            FLASH_PAGE_SIZE)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+#define ANALYZE_REQUIRE(condition, ...)                                        \
+  do {                                                                         \
+    bool passed = (condition);                                                 \
+    test_report(passed, __VA_ARGS__);                                          \
+    if (!passed) {                                                             \
+      uart_puts("[ANALYZER] TEST ABORTED\r\n");                                \
+      return;                                                                  \
+    }                                                                          \
+  } while (0)
+
+void test_flash_storage_analyze(void) {
+
+  uart_puts("\r\n========= FLASH ANALYZER TEST =========\r\n");
+
+  const uint32_t base = NVM_STORAGE_START;
+  const uint32_t pageSize = FLASH_PAGE_SIZE;
+  const uint32_t totalPages = NVM_STORAGE_SIZE / FLASH_PAGE_SIZE;
+
+  FlashRecord records[16];
+  uint32_t len = 0;
+
+  uint8_t settings[20];
+  uint8_t history[32];
+  uint8_t imageOld[700];
+  uint8_t imageNew[1100];
+
+  // Initialize predictable payloads.
+  for (uint32_t i = 0; i < sizeof(settings); i++)
+    settings[i] = (uint8_t)(0x10U + i);
+
+  for (uint32_t i = 0; i < sizeof(history); i++)
+    history[i] = (uint8_t)(0x40U + i);
+
+  for (uint32_t i = 0; i < sizeof(imageOld); i++)
+    imageOld[i] = (uint8_t)(i & 0xFFU);
+
+  for (uint32_t i = 0; i < sizeof(imageNew); i++)
+    imageNew[i] = (uint8_t)((i + 0x55U) & 0xFFU);
+
+  // ====================================================
+  // TEST 1: ARGUMENT VALIDATION
+  // ====================================================
+
+  uart_puts("\r\n--- ARGUMENT TESTS ---\r\n");
+
+  ANALYZE_REQUIRE(!flash_storage_analyze(NULL, totalPages, &len, 0),
+                  "Reject NULL record array");
+
+  ANALYZE_REQUIRE(!flash_storage_analyze(records, totalPages, NULL, 0),
+                  "Reject NULL length pointer");
+
+  ANALYZE_REQUIRE(!flash_storage_analyze(records, totalPages - 1U, &len, 0),
+                  "Reject insufficient capacity");
+
+  // ====================================================
+  // TEST 2: ERASED FLASH
+  // ====================================================
+
+  uart_puts("\r\n--- ERASED STORAGE ---\r\n");
+
+  ANALYZE_REQUIRE(nvmctrl_erase_block(base), "Erase reserved flash");
+
+  ANALYZE_REQUIRE(flash_storage_analyze(records, totalPages, &len, 0),
+                  "Analyze erased flash");
+
+  ANALYZE_REQUIRE(len == totalPages, "Return one entry for each physical page");
+
+  bool allErased = true;
+
+  for (uint32_t i = 0; i < totalPages; i++) {
+    if (records[i].flashRecordState != FLASH_STATE_ERASED) {
+      allErased = false;
+      break;
+    }
+  }
+
+  ANALYZE_REQUIRE(allErased, "All 16 pages are ERASED");
+
+  // ====================================================
+  // TEST 3: DUPLICATE HIGHEST SEQUENCE NUMBERS
+  // ====================================================
+
+  uart_puts("\r\n--- DUPLICATE SEQUENCES ---\r\n");
+
+  ANALYZE_REQUIRE(test_write_flash_record(base, FLASH_STORAGE_TYPE_SETTINGS, 5,
+                                          settings, sizeof(settings), false),
+                  "Write Settings sequence 5 at page 0");
+
+  ANALYZE_REQUIRE(test_write_flash_record(base + pageSize,
+                                          FLASH_STORAGE_TYPE_SETTINGS, 5,
+                                          settings, sizeof(settings), false),
+                  "Write duplicate Settings sequence 5 at page 1");
+
+  ANALYZE_REQUIRE(flash_storage_analyze(records, totalPages, &len, 0),
+                  "Analyze duplicate sequences");
+
+  ANALYZE_REQUIRE(records[0].flashRecordState == FLASH_STATE_LIVE &&
+                      records[1].flashRecordState == FLASH_STATE_LIVE,
+                  "Both highest-sequence records remain LIVE");
+
+  // ====================================================
+  // TEST 4: CONSTRUCT MIXED STORAGE
+  // ====================================================
+
+  uart_puts("\r\n--- MIXED STORAGE TEST ---\r\n");
+
+  // Page 2: Game history. Always retained.
+  ANALYZE_REQUIRE(test_write_flash_record(base + 2U * pageSize,
+                                          FLASH_STORAGE_TYPE_GAME_HISTORY, 1,
+                                          history, sizeof(history), false),
+                  "Write history sequence 1");
+
+  // Page 3: Older settings record.
+  ANALYZE_REQUIRE(test_write_flash_record(base + 3U * pageSize,
+                                          FLASH_STORAGE_TYPE_SETTINGS, 3,
+                                          settings, sizeof(settings), false),
+                  "Write out-of-order Settings sequence 3");
+
+  // Pages 4-5: Old two-page image.
+  ANALYZE_REQUIRE(test_write_flash_record(base + 4U * pageSize,
+                                          FLASH_STORAGE_TYPE_IMAGE, 2, imageOld,
+                                          sizeof(imageOld), false),
+                  "Write old two-page image");
+
+  // Pages 6-8: New three-page image.
+  ANALYZE_REQUIRE(test_write_flash_record(base + 6U * pageSize,
+                                          FLASH_STORAGE_TYPE_IMAGE, 4, imageNew,
+                                          sizeof(imageNew), false),
+                  "Write new three-page image");
+
+  // Page 9: Newer Settings sequence 6.
+  // Both sequence-5 records should now become stale.
+  ANALYZE_REQUIRE(test_write_flash_record(base + 9U * pageSize,
+                                          FLASH_STORAGE_TYPE_SETTINGS, 6,
+                                          settings, sizeof(settings), false),
+                  "Write newest Settings sequence 6");
+
+  // Page 10: Valid header but invalid CRC.
+  ANALYZE_REQUIRE(test_write_flash_record(base + 10U * pageSize,
+                                          FLASH_STORAGE_TYPE_SETTINGS, 100,
+                                          settings, sizeof(settings), true),
+                  "Write corrupted record with sequence 100");
+
+  // Page 11: Orphaned data without a record header.
+  uint8_t orphanData = 0x12U;
+
+  ANALYZE_REQUIRE(nvmctrl_write_page(base + 11U * pageSize, &orphanData, 1U),
+                  "Create orphaned flash page");
+
+  // Page 12: A structurally correct record with
+  // an invalid zero sequence number.
+  ANALYZE_REQUIRE(test_write_flash_record(base + 12U * pageSize,
+                                          FLASH_STORAGE_TYPE_SETTINGS, 0,
+                                          settings, sizeof(settings), false),
+                  "Write invalid sequence-zero record");
+
+  // Pages 13, 14, 15 remain erased.
+
+  // ====================================================
+  // TEST 5: ANALYZE EVERY PHYSICAL PAGE
+  // ====================================================
+
+  uart_puts("\r\n--- PAGE CLASSIFICATION ---\r\n");
+
+  ANALYZE_REQUIRE(flash_storage_analyze(records, totalPages, &len, 0),
+                  "Analyze mixed flash records");
+
+  ANALYZE_REQUIRE(len == totalPages, "Analyzer returns all 16 physical pages");
+
+  const FlashState expectedStates[16] = {
+      FLASH_STATE_STALE,   // 0  Settings seq 5
+      FLASH_STATE_STALE,   // 1  Settings seq 5
+      FLASH_STATE_LIVE,    // 2  History seq 1
+      FLASH_STATE_STALE,   // 3  Settings seq 3
+      FLASH_STATE_STALE,   // 4  Old image header
+      FLASH_STATE_STALE,   // 5  Old image continuation
+      FLASH_STATE_LIVE,    // 6  New image header
+      FLASH_STATE_LIVE,    // 7  New image continuation
+      FLASH_STATE_LIVE,    // 8  New image continuation
+      FLASH_STATE_LIVE,    // 9  Settings seq 6
+      FLASH_STATE_INVALID, // 10 Bad CRC
+      FLASH_STATE_INVALID, // 11 Orphan
+      FLASH_STATE_INVALID, // 12 Zero sequence
+      FLASH_STATE_ERASED,  // 13
+      FLASH_STATE_ERASED,  // 14
+      FLASH_STATE_ERASED   // 15
+  };
+
+  const uint32_t parentPages[16] = {0, 1, 2,  3,  4,  4,  6,  6,
+                                    6, 9, 10, 11, 12, 13, 14, 15};
+
+  uint32_t stateCounts[4] = {0};
+
+  for (uint32_t i = 0; i < totalPages; i++) {
+
+    FlashState actual = records[i].flashRecordState;
+    FlashState expected = expectedStates[i];
+
+    uintptr_t expectedAddress = base + parentPages[i] * pageSize;
+
+    bool passed = actual == expected &&
+                  records[i].flashRecordAddress == expectedAddress &&
+                  records[i].flashRecordSize == FLASH_PAGE_SIZE;
+
+    test_report(passed,
+                "Page %u: state expected %u actual %u, "
+                "parent expected 0x%x actual 0x%x",
+                (unsigned int)i, (unsigned int)expected, (unsigned int)actual,
+                (unsigned int)expectedAddress,
+                (unsigned int)records[i].flashRecordAddress);
+
+    if (!passed) {
+      uart_puts("[ANALYZER] TEST ABORTED\r\n");
+      return;
+    }
+
+    stateCounts[actual]++;
+  }
+
+  // ====================================================
+  // TEST 6: VERIFY TOTAL CLASSIFICATIONS
+  // ====================================================
+
+  uart_puts("\r\n--- FINAL STATISTICS ---\r\n");
+
+  ANALYZE_REQUIRE(stateCounts[FLASH_STATE_LIVE] == 5, "Expected 5 LIVE pages");
+
+  ANALYZE_REQUIRE(stateCounts[FLASH_STATE_STALE] == 5,
+                  "Expected 5 STALE pages");
+
+  ANALYZE_REQUIRE(stateCounts[FLASH_STATE_INVALID] == 3,
+                  "Expected 3 INVALID pages");
+
+  ANALYZE_REQUIRE(stateCounts[FLASH_STATE_ERASED] == 3,
+                  "Expected 3 ERASED pages");
+
+  uart_puts("\r\n========================================\r\n");
+  uart_puts("ALL FLASH ANALYZER TESTS PASSED\r\n");
+  uart_puts("========================================\r\n");
+}
+
+#undef ANALYZE_REQUIRE
 
 #undef FLASH_TEST_REQUIRE

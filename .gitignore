@@ -20,3 +20,4 @@ private/
 cmake/**/.generated/*
 cmake/**/CMake*
 !.vscode/extensions.json
+.clangd

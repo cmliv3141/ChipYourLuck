@@ -9,7 +9,7 @@ void test_storage_flash(void);
 void test_crcc_calculation(void);
 void test_flash_read_record_multi_page(void);
 void test_flash_write_record_multi_page(void);
-void test_flash_write_record(void);
+//void test_flash_write_record(void);
 void test_nvmctrl_get_next_page(void);
 void test_nvmctrl_write_page(void);
 void test_nvmctrl_erase_flash(void);
